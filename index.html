@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<!--
+    TODO:
+    Backward selection still wrong. The whole "started" boolean isn't right.
+    Shouldn't color spaces. Skip when coloring or incrementing c.
+    Nicer COPY button.
+-->
+<html>
+    <head>
+        <style>
+            body {
+                font-family: sans-serif;
+                font-size: 30px;
+            }
+            #text {
+                background-color: black;
+                padding: 20px;
+                color: white;
+            }
+            .swatch {
+                padding: 5px 10px;
+                background-color: black;
+                color: white;
+            }
+            .light-swatch {
+                color: black;
+            }
+            #result {
+                font-family: monospace;
+                font-size: 30px;
+                width: 100%;
+                height: 400px;
+                display: block;
+                margin-top: 40px;
+            }
+        </style>
+        <script>
+            'use strict';
+
+            var SWATCHES = [
+                { label: "Dark Red", name: "dark_red", hex: "#aa0000" },
+                { label: "Red", name: "red", hex: "#ff5555" },
+                { label: "Gold", name: "gold", hex: "#ffaa00", light: true },
+                { label: "Yellow", name: "yellow", hex: "#ffff55", light: true },
+                { label: "Dark Green", name: "dark_green", hex: "#00aa00" },
+                { label: "Green", name: "green", hex: "#55ff55", light: true },
+                { label: "Aqua", name: "aqua", hex: "#55ffff", light: true },
+                { label: "Dark Aqua", name: "dark_aqua", hex: "#00aaaa" },
+                { label: "Dark Blue", name: "dark_blue", hex: "#0000aa" },
+                { label: "Blue", name: "blue", hex: "#5555ff" },
+                { label: "Light Purple", name: "light_purple", hex: "#ff55ff" },
+                { label: "Dark Purple", name: "dark_purple", hex: "#aa00aa" },
+
+                { label: "White", name: "white", hex: "#ffffff", light: true },
+                { label: "Gray", name: "gray", hex: "#aaaaaa", light: true },
+                { label: "Dark Gray", name: "dark_gray", hex: "#555555" },
+                { label: "Black", name: "black", hex: "#000000" },
+            ];
+            var COLOR_COUNT = 12;
+
+            function addText(text) {
+                var resultNode = document.getElementById("result");
+                resultNode.textContent += text;
+            }
+
+            function addAttributedText(text, color, bold, underline, strikethrough, italic) {
+                var resultNode = document.getElementById("result");
+                var existingText = resultNode.textContent;
+                if (existingText.substring(existingText.length - 1) === "}") {
+                    addText(",");
+                }
+
+                addText('{"text":"' + text + '"');
+                if (bold) {
+                    addText(',"bold":true');
+                }
+                if (underline) {
+                    addText(',"underlined":true');
+                }
+                if (strikethrough) {
+                    addText(',"strikethrough":true');
+                }
+                if (italic) {
+                    addText(',"italic":true');
+                }
+                if (color !== "white") {
+                    addText(',"color":"' + color + '"');
+                }
+                addText('}');
+            }
+
+            // Add all text notes of this tree (in order) to the textNodes array.
+            function getTextNodes(node) {
+                var textNodes = [];
+
+                function internal(node) {
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        textNodes.push(node);
+                    }
+
+                    for (let child of node.childNodes) {
+                        internal(child);
+                    }
+                }
+
+                internal(node);
+
+                return textNodes;
+            }
+
+            function processNode(node, color, bold, underline, strikethrough, italic) {
+                var tagName = node.tagName.toLowerCase();
+                if (tagName === "font") {
+                    var colorValue = node.attributes.color.value.toLowerCase();
+                    var found = false;
+                    for (let swatch of SWATCHES) {
+                        if (colorValue === swatch.hex) {
+                            color = swatch.name;
+                            found = true;
+                        }
+                    }
+                    if (!found) {
+                        console.log("Unknown color value: " + colorValue);
+                    }
+                } else if (tagName === "b") {
+                    bold = true;
+                } else if (tagName === "u") {
+                    underline = true;
+                } else if (tagName === "strike") {
+                    strikethrough = true;
+                } else if (tagName === "i") {
+                    italic = true;
+                }
+
+                for (let child of node.childNodes) {
+                    if (child.nodeType === Node.TEXT_NODE) {
+                        addAttributedText(child.textContent, color, bold, underline, strikethrough, italic);
+                    } else if (child.nodeType === Node.ELEMENT_NODE) {
+                        processNode(child, color, bold, underline, strikethrough, italic);
+                    } else {
+                        console.log("Unknown note type: " + child.nodeType);
+                    }
+                }
+            }
+
+            function update() {
+                var resultNode = document.getElementById("result");
+                resultNode.textContent = "";
+                addText("/tellraw @a [");
+
+                var textNode = document.getElementById("text");
+                processNode(textNode, "white", false, false, false, false);
+
+                addText("]");
+
+                var errorNode = document.getElementById("error");
+                var length = resultNode.textContent.length;
+                if (length > 255) {
+                    errorNode.textContent = "Text too long (" + length + "), must use command block";
+                } else {
+                    errorNode.textContent = "";
+                }
+            }
+
+            function copyResult() {
+                var resultNode = document.getElementById("result");
+                resultNode.focus();
+                resultNode.select();
+                document.execCommand('copy');
+            }
+
+            function makeColorFunction(hex) {
+                return function () {
+                    document.execCommand("foreColor", false, hex);
+                    update();
+                };
+            }
+
+            function rainbow() {
+                var sel = window.getSelection();
+                if (sel.type === "Range") {
+                    var textNode = document.getElementById("text");
+                    var textNodes = getTextNodes(textNode);
+
+                    // Find global (numeric) begin and end of selection, in characters.
+                    var globalBegin = 0;
+                    var globalEnd = 0;
+                    var started = false;
+                    for (let node of textNodes) {
+                        var length = node.textContent.length;
+                        var begin = 0;
+                        var end = node.textContent.length;
+
+                        if (!started) {
+                            if (node === sel.anchorNode) {
+                                started = true;
+                                globalBegin += sel.anchorOffset;
+                            } else {
+                                globalBegin += length;
+                                globalEnd += length;
+                            }
+                        }
+
+                        if (started) {
+                            if (node === sel.focusNode) {
+                                globalEnd += sel.focusOffset;
+                            } else {
+                                globalEnd += length;
+                            }
+                        }
+
+                        if (started && node === sel.focusNode) {
+                            break;
+                        }
+                    }
+
+                    // If you select right-to-left.
+                    if (globalEnd < globalBegin) {
+                        var tmp = globalEnd;
+                        globalEnd = globalBegin;
+                        globalBegin = tmp;
+                    }
+
+                    console.log(globalBegin, globalEnd);
+
+                    // Highlight each character.
+                    var c = 0;
+                    for (let i = globalBegin; i < globalEnd; i++) {
+                        // We have to keep getting the full list because each time
+                        // we change a character's color the set of text nodes
+                        // changes.
+                        var textNodes = getTextNodes(textNode);
+
+                        var begin = 0;
+                        for (let node of textNodes) {
+                            var length = node.textContent.length;
+
+                            if (begin <= i && i < begin + length) {
+                                sel.setBaseAndExtent(node, i - begin, node, i - begin + 1);
+                                document.execCommand("foreColor", false, SWATCHES[c%COLOR_COUNT].hex);
+                                c++;
+                                break;
+                            }
+
+                            begin += length;
+                        }
+                    }
+
+                    // Restore original selection.
+                    var textNodes = getTextNodes(textNode);
+                    var beginNode;
+                    var endNode;
+                    var beginOffset;
+                    var endOffset;
+
+                    var begin = 0;
+                    for (let node of textNodes) {
+                        var length = node.textContent.length;
+
+                        if (begin <= globalBegin && globalBegin < begin + length) {
+                            beginNode = node;
+                            beginOffset = globalBegin - begin;
+                        }
+                        if (begin <= globalEnd && globalEnd < begin + length) {
+                            endNode = node;
+                            endOffset = globalEnd - begin;
+                            break;
+                        }
+
+                        begin += length;
+                    }
+
+                    sel.setBaseAndExtent(beginNode, beginOffset, endNode, endOffset);
+                }
+
+                update();
+            }
+
+            function animateRainbow() {
+                var rainbowButton = document.getElementById("rainbowButton");
+                while (rainbowButton.firstChild) {
+                    rainbowButton.removeChild(rainbowButton.firstChild);
+                }
+
+                var text = "Rainbow";
+
+                for (let i = 0; i < text.length; i++) {
+                    var span = document.createElement("span");
+                    span.textContent = text.substring(i, i + 1);
+                    span.style.color = SWATCHES[i + 1].hex;
+                    rainbowButton.appendChild(span);
+                }
+
+                // No need to animate, we don't change.
+                // requestAnimationFrame(animateRainbow);
+            }
+
+            function start() {
+                var colorsNode = document.getElementById("colors");
+                for (let swatch of SWATCHES) {
+                    var button = document.createElement("button");
+                    button.textContent = swatch.label;
+                    button.style.backgroundColor = swatch.hex;
+                    button.classList.add("swatch");
+                    if (swatch.light) {
+                        button.classList.add("light-swatch");
+                    }
+                    button.addEventListener("click", makeColorFunction(swatch.hex));
+                    colorsNode.appendChild(button);
+                }
+
+                update();
+
+                requestAnimationFrame(animateRainbow);
+            }
+        </script>
+    </head>
+    <body onload="start()">
+        <div id="text" contenteditable="true">Type your text here...</div>
+        <div id="colors"></div>
+        <div id="attrs"><button class="swatch" style="font-weight: bold;" onclick="document.execCommand('bold');update();">Bold</button><button class="swatch" style="text-decoration: underline;" onclick="document.execCommand('underline');update();">Underline</button><button class="swatch" style="text-decoration: line-through;" onclick="document.execCommand('strikethrough');update();">Strikethrough</button><button class="swatch" style="font-style: italic;" onclick="document.execCommand('italic');update();">Italic</button>
+            <button id="rainbowButton" class="swatch" onclick="rainbow()">Rainbow</button>
+        </div>
+        <textarea id="result"></textarea>
+        <button onclick="copyResult()">Copy</button>
+        <span id="error"></span>
+    </body>
+</html>
+
