@@ -8,6 +8,10 @@
 <html>
     <head>
         <style>
+            @font-face {
+              font-family: "Minecraft";
+              src: url("minecraft_font.ttf") format("truetype");
+            }
             body {
                 font-family: sans-serif;
                 font-size: 30px;
@@ -16,6 +20,7 @@
                 background-color: black;
                 padding: 20px;
                 color: white;
+                font-family: Minecraft, sans-serif;
             }
             .swatch {
                 padding: 5px 10px;
@@ -25,7 +30,7 @@
             .light-swatch {
                 color: black;
             }
-            #result {
+            .result {
                 font-family: monospace;
                 font-size: 30px;
                 width: 100%;
@@ -38,55 +43,113 @@
             'use strict';
 
             var SWATCHES = [
-                { label: "Dark Red", name: "dark_red", hex: "#aa0000" },
-                { label: "Red", name: "red", hex: "#ff5555" },
-                { label: "Gold", name: "gold", hex: "#ffaa00", light: true },
-                { label: "Yellow", name: "yellow", hex: "#ffff55", light: true },
-                { label: "Dark Green", name: "dark_green", hex: "#00aa00" },
-                { label: "Green", name: "green", hex: "#55ff55", light: true },
-                { label: "Aqua", name: "aqua", hex: "#55ffff", light: true },
-                { label: "Dark Aqua", name: "dark_aqua", hex: "#00aaaa" },
-                { label: "Dark Blue", name: "dark_blue", hex: "#0000aa" },
-                { label: "Blue", name: "blue", hex: "#5555ff" },
-                { label: "Light Purple", name: "light_purple", hex: "#ff55ff" },
-                { label: "Dark Purple", name: "dark_purple", hex: "#aa00aa" },
+                { label: "Dark Red", name: "dark_red", hex: "#aa0000", suffix: "4" },
+                { label: "Red", name: "red", hex: "#ff5555", suffix: "c" },
+                { label: "Gold", name: "gold", hex: "#ffaa00", light: true, suffix: "6" },
+                { label: "Yellow", name: "yellow", hex: "#ffff55", light: true, suffix: "e" },
+                { label: "Dark Green", name: "dark_green", hex: "#00aa00", suffix: "2" },
+                { label: "Green", name: "green", hex: "#55ff55", light: true, suffix: "a" },
+                { label: "Aqua", name: "aqua", hex: "#55ffff", light: true, suffix: "b" },
+                { label: "Dark Aqua", name: "dark_aqua", hex: "#00aaaa", suffix: "3" },
+                { label: "Dark Blue", name: "dark_blue", hex: "#0000aa", suffix: "1" },
+                { label: "Blue", name: "blue", hex: "#5555ff", suffix: "9" },
+                { label: "Light Purple", name: "light_purple", hex: "#ff55ff", suffix: "d" },
+                { label: "Dark Purple", name: "dark_purple", hex: "#aa00aa", suffix: "5" },
 
-                { label: "White", name: "white", hex: "#ffffff", light: true },
-                { label: "Gray", name: "gray", hex: "#aaaaaa", light: true },
-                { label: "Dark Gray", name: "dark_gray", hex: "#555555" },
-                { label: "Black", name: "black", hex: "#000000" },
+                { label: "White", name: "white", hex: "#ffffff", light: true, suffix: "f" },
+                { label: "Gray", name: "gray", hex: "#aaaaaa", light: true, suffix: "7" },
+                { label: "Dark Gray", name: "dark_gray", hex: "#555555", suffix: "8" },
+                { label: "Black", name: "black", hex: "#000000", suffix: "0" },
             ];
             var COLOR_COUNT = 12;
 
-            function addText(text) {
-                var resultNode = document.getElementById("result");
+            function makeBlankState() {
+                return {
+                    color: "gray",
+                    bold: false,
+                    underline: false,
+                    strikethrough: false,
+                    italic: false,
+                };
+            };
+
+            function addText(motd, text) {
+                var resultNode = document.getElementById(motd ? "motdResult" : "chatResult");
                 resultNode.textContent += text;
             }
 
-            function addAttributedText(text, color, bold, underline, strikethrough, italic) {
-                var resultNode = document.getElementById("result");
-                var existingText = resultNode.textContent;
-                if (existingText.substring(existingText.length - 1) === "}") {
-                    addText(",");
-                }
+            function addAttributedText(motd, text, state, color, bold, underline, strikethrough, italic) {
+                if (motd) {
+                    var resultNode = document.getElementById("motdResult");
+                    if (bold !== state.bold ||
+                            underline !== state.underline ||
+                            strikethrough !== state.strikethrough ||
+                            italic !== state.italic) {
 
-                addText('{"text":"' + text + '"');
-                if (bold) {
-                    addText(',"bold":true');
+                        // Must reset all these at once.
+                        addText(motd, '\\u00A7r');
+                        state.color = "gray";
+                        state.bold = false;
+                        state.underline = false;
+                        state.strikethrough = false;
+                        state.italic = false;
+                    }
+                    if (bold && !state.bold) {
+                        addText(motd, '\\u00A7l');
+                        state.bold = true;
+                    }
+                    if (underline && !state.underline) {
+                        addText(motd, '\\u00A7n');
+                        state.underline = true;
+                    }
+                    if (strikethrough && !state.strikethrough) {
+                        addText(motd, '\\u00A7m');
+                        state.strikethrough = true;
+                    }
+                    if (italic && !state.italic) {
+                        addText(motd, '\\u00A7o');
+                        state.italic = true;
+                    }
+                    if (color !== state.color) {
+                        for (let swatch of SWATCHES) {
+                            if (swatch.name === color) {
+                                addText(motd, '\\u00A7' + swatch.suffix);
+                                break;
+                            }
+                        }
+                        state.color = color;
+                        // Changing color resets all these.
+                        state.bold = false;
+                        state.underline = false;
+                        state.strikethrough = false;
+                        state.italic = false;
+                    }
+                    addText(motd, text);
+                } else {
+                    var resultNode = document.getElementById("chatResult");
+                    var existingText = resultNode.textContent;
+                    if (existingText.substring(existingText.length - 1) === "}") {
+                        addText(motd, ",");
+                    }
+
+                    addText(motd, '{"text":"' + text + '"');
+                    if (bold) {
+                        addText(motd, ',"bold":true');
+                    }
+                    if (underline) {
+                        addText(motd, ',"underlined":true');
+                    }
+                    if (strikethrough) {
+                        addText(motd, ',"strikethrough":true');
+                    }
+                    if (italic) {
+                        addText(motd, ',"italic":true');
+                    }
+                    if (color !== "gray") {
+                        addText(motd, ',"color":"' + color + '"');
+                    }
+                    addText(motd, '}');
                 }
-                if (underline) {
-                    addText(',"underlined":true');
-                }
-                if (strikethrough) {
-                    addText(',"strikethrough":true');
-                }
-                if (italic) {
-                    addText(',"italic":true');
-                }
-                if (color !== "white") {
-                    addText(',"color":"' + color + '"');
-                }
-                addText('}');
             }
 
             // Add all text notes of this tree (in order) to the textNodes array.
@@ -108,7 +171,7 @@
                 return textNodes;
             }
 
-            function processNode(node, color, bold, underline, strikethrough, italic) {
+            function processNode(motd, node, state, color, bold, underline, strikethrough, italic) {
                 var tagName = node.tagName.toLowerCase();
                 if (tagName === "font") {
                     var colorValue = node.attributes.color.value.toLowerCase();
@@ -134,24 +197,25 @@
 
                 for (let child of node.childNodes) {
                     if (child.nodeType === Node.TEXT_NODE) {
-                        addAttributedText(child.textContent, color, bold, underline, strikethrough, italic);
+                        addAttributedText(motd, child.textContent, state, color, bold, underline, strikethrough, italic);
                     } else if (child.nodeType === Node.ELEMENT_NODE) {
-                        processNode(child, color, bold, underline, strikethrough, italic);
+                        processNode(motd, child, state, color, bold, underline, strikethrough, italic);
                     } else {
-                        console.log("Unknown note type: " + child.nodeType);
+                        console.log("Unknown node type: " + child.nodeType);
                     }
                 }
             }
 
-            function update() {
-                var resultNode = document.getElementById("result");
+            function updateChat() {
+                var resultNode = document.getElementById("chatResult");
                 resultNode.textContent = "";
-                addText("/tellraw @a [");
+                addText(false, "/tellraw @a [");
 
                 var textNode = document.getElementById("text");
-                processNode(textNode, "white", false, false, false, false);
+                var state = makeBlankState();
+                processNode(false, textNode, state, "gray", false, false, false, false);
 
-                addText("]");
+                addText(false, "]");
 
                 var errorNode = document.getElementById("error");
                 var length = resultNode.textContent.length;
@@ -162,8 +226,22 @@
                 }
             }
 
-            function copyResult() {
-                var resultNode = document.getElementById("result");
+            function updateMotd() {
+                var resultNode = document.getElementById("motdResult");
+                resultNode.textContent = "";
+
+                var textNode = document.getElementById("text");
+                var state = makeBlankState();
+                processNode(true, textNode, state, "gray", false, false, false, false);
+            }
+
+            function update() {
+                updateChat();
+                updateMotd();
+            }
+
+            function copyResult(elementId) {
+                var resultNode = document.getElementById(elementId);
                 resultNode.focus();
                 resultNode.select();
                 document.execCommand('copy');
@@ -220,8 +298,6 @@
                         globalEnd = globalBegin;
                         globalBegin = tmp;
                     }
-
-                    console.log(globalBegin, globalEnd);
 
                     // Highlight each character.
                     var c = 0;
@@ -321,9 +397,15 @@
         <div id="attrs"><button class="swatch" style="font-weight: bold;" onclick="document.execCommand('bold');update();">Bold</button><button class="swatch" style="text-decoration: underline;" onclick="document.execCommand('underline');update();">Underline</button><button class="swatch" style="text-decoration: line-through;" onclick="document.execCommand('strikethrough');update();">Strikethrough</button><button class="swatch" style="font-style: italic;" onclick="document.execCommand('italic');update();">Italic</button>
             <button id="rainbowButton" class="swatch" onclick="rainbow()">Rainbow</button>
         </div>
-        <textarea id="result"></textarea>
-        <button onclick="copyResult()">Copy</button>
-        <span id="error"></span>
+        <div>
+            <textarea id="chatResult" class="result"></textarea>
+            <button onclick="copyResult('chatResult')">Copy</button>
+            <span id="error"></span>
+        </div>
+        <div>
+            <textarea id="motdResult" class="result"></textarea>
+            <button onclick="copyResult('motdResult')">Copy</button>
+        </div>
     </body>
 </html>
 
